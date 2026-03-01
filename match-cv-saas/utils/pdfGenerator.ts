@@ -12,6 +12,10 @@ export interface CVData {
     descricao: string;
   }>;
   habilidades: string[];
+  idiomas?: Array<{
+    idioma: string;
+    nivel: string;
+  }>;
   educacao?: Array<{
     curso: string;
     instituicao: string;
@@ -53,13 +57,11 @@ function renderizarDescricao(
 
     if (isBullet) {
       const currentY = doc.y;
-      // bullet azul
       doc
         .fillColor('#2563eb')
         .fontSize(10)
         .font('Helvetica-Bold')
         .text('•', marginX + 8, currentY, { lineBreak: false });
-      // texto do bullet
       doc
         .fillColor('#1f2937')
         .fontSize(10)
@@ -105,9 +107,9 @@ export async function gerarPDFOtimizado(cvData: CVData): Promise<Buffer> {
       doc.on('error', reject);
 
       const marginX = 50;
-      const larguraUtil = doc.page.width - marginX * 2; // ~495pt
+      const larguraUtil = doc.page.width - marginX * 2;
 
-      // ── HEADER ──────────────────────────────────────────────────────
+      // ── HEADER ──────────────────────────────────────────────────
       doc
         .fillColor('#2563eb')
         .fontSize(22)
@@ -132,7 +134,7 @@ export async function gerarPDFOtimizado(cvData: CVData): Promise<Buffer> {
         .stroke();
       doc.moveDown(0.6);
 
-      // ── RESUMO ───────────────────────────────────────────────────────
+      // ── RESUMO ───────────────────────────────────────────────────
       if (cvData.resumo?.trim()) {
         secao(doc, 'Resumo Profissional', marginX);
         doc
@@ -146,7 +148,7 @@ export async function gerarPDFOtimizado(cvData: CVData): Promise<Buffer> {
           });
       }
 
-      // ── EXPERIÊNCIAS ─────────────────────────────────────────────────
+      // ── EXPERIÊNCIAS ─────────────────────────────────────────────
       if (cvData.experiencias.length > 0) {
         secao(doc, 'Experiência Profissional', marginX);
 
@@ -185,7 +187,7 @@ export async function gerarPDFOtimizado(cvData: CVData): Promise<Buffer> {
         });
       }
 
-      // ── HABILIDADES ──────────────────────────────────────────────────
+      // ── HABILIDADES ──────────────────────────────────────────────
       if (cvData.habilidades.length > 0) {
         secao(doc, 'Competências Técnicas', marginX);
 
@@ -220,7 +222,64 @@ export async function gerarPDFOtimizado(cvData: CVData): Promise<Buffer> {
         doc.y = tagY + tagH + 12;
       }
 
-      // ── EDUCAÇÃO ─────────────────────────────────────────────────────
+      // ── IDIOMAS ──────────────────────────────────────────────────
+      if (cvData.idiomas && cvData.idiomas.length > 0) {
+        secao(doc, 'Idiomas', marginX);
+
+        // Renderiza como pares "Idioma — Nível" em linha, separados por espaço
+        let idiomaX = marginX;
+        let idiomaY = doc.y;
+        const cardH = 36;
+        const cardPadH = 12;
+        const cardPadV = 4;
+        const cardGap = 10;
+
+        cvData.idiomas.forEach((item) => {
+          const idiomaLabel = item.idioma || '';
+          const nivelLabel = item.nivel || '';
+
+          // Largura baseada no maior dos dois textos
+          const wIdioma = doc.fontSize(10).widthOfString(idiomaLabel);
+          const wNivel = doc.fontSize(8).widthOfString(nivelLabel);
+          const cardW = Math.max(wIdioma, wNivel) + cardPadH * 2;
+
+          if (idiomaX + cardW > doc.page.width - marginX) {
+            idiomaX = marginX;
+            idiomaY += cardH + cardGap;
+          }
+
+          // Card com borda azul
+          doc
+            .roundedRect(idiomaX, idiomaY, cardW, cardH, 4)
+            .fillAndStroke('#eff6ff', '#bfdbfe');
+
+          // Nome do idioma
+          doc
+            .fillColor('#1e3a8a')
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .text(idiomaLabel, idiomaX + cardPadH, idiomaY + cardPadV + 2, {
+              width: cardW - cardPadH * 2,
+              lineBreak: false,
+            });
+
+          // Nível
+          doc
+            .fillColor('#3b82f6')
+            .fontSize(8)
+            .font('Helvetica')
+            .text(nivelLabel, idiomaX + cardPadH, idiomaY + cardPadV + 16, {
+              width: cardW - cardPadH * 2,
+              lineBreak: false,
+            });
+
+          idiomaX += cardW + cardGap;
+        });
+
+        doc.y = idiomaY + cardH + 12;
+      }
+
+      // ── EDUCAÇÃO ─────────────────────────────────────────────────
       if (cvData.educacao && cvData.educacao.length > 0) {
         secao(doc, 'Formação Acadêmica', marginX);
 
@@ -247,7 +306,7 @@ export async function gerarPDFOtimizado(cvData: CVData): Promise<Buffer> {
         });
       }
 
-      // ── RODAPÉ ───────────────────────────────────────────────────────
+      // ── RODAPÉ ───────────────────────────────────────────────────
       doc
         .fillColor('#d1d5db')
         .fontSize(7.5)

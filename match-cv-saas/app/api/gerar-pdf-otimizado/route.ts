@@ -17,8 +17,8 @@ export async function POST(request: Request) {
     });
 
     const prompt = `
-Você é um especialista sênior em recrutamento, ATS e otimização de currículos.
-Seu objetivo é reescrever o currículo abaixo para MAXIMIZAR as chances de aprovação na vaga.
+Você é um headhunter sênior especialista em ATS e otimização de currículos.
+Reescreva o currículo abaixo para MAXIMIZAR as chances de aprovação na vaga específica.
 
 ═══════════════════════════════════
 CURRÍCULO ORIGINAL:
@@ -43,27 +43,46 @@ ${missingSkills?.length ? missingSkills.join(', ') : 'Nenhuma'}
 ═══════════════════════════════════
 REGRAS OBRIGATÓRIAS:
 ═══════════════════════════════════
-1. PRESERVAR EXATAMENTE: nome, email, telefone, LinkedIn, nomes de empresas, cargos, períodos, instituições, cursos e anos
-2. EXPANDIR cada experiência com 4 a 6 bullet points ricos e orientados a resultados
-3. INTEGRAR skills adicionais naturalmente nos bullet points onde fizer sentido real
-4. REESCREVER o resumo com foco nos requisitos da vaga (3-4 linhas)
-5. USAR palavras-chave exatas da vaga para passar no ATS
-6. ADICIONAR métricas e resultados concretos onde possível (%, tempo, escala)
-7. NÃO inventar empresas, cargos, períodos ou formações inexistentes
-8. HABILIDADES: incluir todas do original + skills adicionais + keywords relevantes da vaga
-9. Cada bullet point DEVE começar com "• " (bullet e espaço)
-10. Separar bullet points com \\n
+1. PRESERVAR EXATAMENTE: nome, email, telefone, LinkedIn, empresas, cargos, períodos, instituições, cursos, anos e idiomas do original
+
+2. RESUMO PROFISSIONAL — regras estritas:
+   - Primeira frase: mencionar o CARGO EXATO da vaga e o SETOR/ÁREA da empresa (ex: "Procurement Specialist com foco em gestão de contratos para o setor de consultoria de TI")
+   - Segunda frase: conectar os 2-3 principais requisitos da vaga com experiências reais do candidato
+   - Terceira frase: proposta de valor concreta — o que o candidato ENTREGA, não quem ele "é"
+   - PROIBIDO: "profissional dedicado", "busca novos desafios", "ampla experiência", "perfil dinâmico", "proativo", "comprometido"
+   - Máximo 4 linhas, linguagem direta, específica e orientada à vaga
+
+3. EXPERIÊNCIAS — para cada cargo:
+   - 4 a 6 bullet points ricos, detalhados e orientados a resultados
+   - Integrar as skills adicionais naturalmente onde fizer sentido real
+   - Usar palavras-chave EXATAS da vaga para passar no ATS
+   - Adicionar métricas e resultados concretos onde possível (%, tempo, escala, valor)
+
+4. HABILIDADES: incluir todas do original + skills adicionais + keywords relevantes da vaga
+
+5. IDIOMAS: extrair do currículo original TODOS os idiomas mencionados com seus níveis.
+   Se não houver idiomas no CV mas a vaga exigir ou mencionar algum idioma, incluir o idioma da vaga com nível "A verificar".
+   Formato: [{ "idioma": "Português", "nivel": "Nativo" }, { "idioma": "Inglês", "nivel": "Intermediário" }]
+
+6. NÃO inventar empresas, cargos, períodos ou formações inexistentes
+
+7. Cada bullet point DEVE começar com "• " e ser separado por \\n
 
 ═══════════════════════════════════
-EXEMPLO DE DESCRIÇÃO CORRETA:
+EXEMPLO DE RESUMO CORRETO:
 ═══════════════════════════════════
-"• Gerenciei ciclo completo de contratos (contract lifecycle) com fornecedores, desde negociação até encerramento, reduzindo custos em 15%\\n• Conduzi processos de indirect procurement com foco em otimização de custos e melhoria de SLAs\\n• Implementei e administrei módulos do SAP R/3 para gestão de pedidos e contratos\\n• Desenvolvi dashboards no Excel Avançado e Power BI para monitoramento de KPIs de fornecedores\\n• Mantive base de documentação obrigatória de fornecedores atualizada, garantindo compliance"
+"Procurement Specialist com 10 anos de experiência em gestão de contratos e compras indiretas para o setor de incorporação e construção civil. Histórico comprovado em negociação com fornecedores, implementação de sistemas ERP e otimização de processos de compra que resultaram em reduções de custo significativas. Entrega estruturação de ciclo completo de contratos, desde a negociação até o encerramento, com foco em compliance e eficiência operacional."
 
 ═══════════════════════════════════
-TAMBÉM EXTRAIA DA VAGA:
+EXEMPLO DE BULLET POINTS CORRETOS:
 ═══════════════════════════════════
-- vagaResumo: resumo da vaga em 2 linhas (empresa, cargo, local, modelo de trabalho)
-- salario: salário mencionado na vaga como string (ex: "€1.200 a €2.000 + Food Allowance + Flex Benefits"). Se não houver, use "Não informado"
+"• Gerenciei ciclo completo de contratos (contract lifecycle) com fornecedores estratégicos, desde negociação até encerramento, reduzindo custos operacionais em 18%\\n• Conduzi processos de indirect procurement para serviços de consultoria e tecnologia, garantindo SLAs e compliance documental\\n• Implementei e administrei módulos do SAP R/3 para gestão de pedidos, contratos e relatórios gerenciais\\n• Desenvolvi dashboards no Excel Avançado e Power BI para monitoramento de KPIs de fornecedores e orçamento\\n• Mantive base de documentação obrigatória de fornecedores atualizada, assegurando conformidade regulatória"
+
+═══════════════════════════════════
+EXTRAIA TAMBÉM DA VAGA:
+═══════════════════════════════════
+- vagaResumo: 2 linhas (empresa/cargo/local/modelo de trabalho)
+- salario: valor exato mencionado na vaga. Se não houver, use "Não informado"
 
 ═══════════════════════════════════
 RETORNE APENAS JSON PURO — SEM MARKDOWN:
@@ -71,7 +90,7 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
 {
   "nome": "Nome exato",
   "contato": "email | telefone | linkedin",
-  "resumo": "Resumo otimizado para a vaga em 3-4 linhas",
+  "resumo": "Resumo profissional altamente direcionado à vaga",
   "experiencias": [
     {
       "cargo": "Cargo exato",
@@ -81,6 +100,10 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
     }
   ],
   "habilidades": ["skill1", "skill2", "skill3"],
+  "idiomas": [
+    { "idioma": "Português", "nivel": "Nativo" },
+    { "idioma": "Inglês", "nivel": "Intermediário" }
+  ],
   "educacao": [
     {
       "curso": "Curso exato",
@@ -89,7 +112,7 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
     }
   ],
   "vagaResumo": "Resumo da vaga em 2 linhas",
-  "salario": "Salário extraído da vaga ou 'Não informado'"
+  "salario": "Salário extraído ou 'Não informado'"
 }
 `;
 
@@ -98,8 +121,13 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
       messages: [
         {
           role: 'system',
-          content:
-            'Você é um especialista em currículos e ATS. Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.',
+          content: `Você é um headhunter sênior especialista em ATS.
+Ao escrever o resumo profissional do CV:
+- NUNCA use frases genéricas como "profissional dedicado", "busca novos desafios", "ampla experiência" ou "perfil dinâmico"
+- SEMPRE mencione o cargo-alvo e o setor da empresa da vaga na primeira frase
+- SEMPRE conecte as conquistas do candidato com os requisitos específicos da vaga
+- Escreva como se o candidato já fosse a pessoa ideal para aquela posição
+Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
         },
         { role: 'user', content: prompt },
       ],
@@ -126,7 +154,6 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
       throw new Error('A IA retornou JSON inválido. Tente novamente.');
     }
 
-    // Validação mínima
     if (!parsed.nome || !Array.isArray(parsed.experiencias) || parsed.experiencias.length === 0) {
       console.error('❌ Estrutura inválida:', JSON.stringify(parsed, null, 2));
       throw new Error('IA não gerou CV com estrutura válida');
@@ -135,8 +162,9 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
     // Garantir arrays
     parsed.habilidades = parsed.habilidades || [];
     parsed.educacao = parsed.educacao || [];
+    parsed.idiomas = Array.isArray(parsed.idiomas) ? parsed.idiomas : [];
 
-    // Normalizar \n literal em quebra real nos bullet points
+    // Normalizar \n literal em quebra real
     parsed.experiencias = parsed.experiencias.map((exp: any) => ({
       ...exp,
       descricao: String(exp.descricao || '')
@@ -145,20 +173,20 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
         .trim(),
     }));
 
-    // Extrair cvData sem campos extras
-    const cvData: import('@/utils/pdfGenerator').CVData = {
+    const cvData: CVData = {
       nome: parsed.nome,
       contato: parsed.contato,
       resumo: parsed.resumo,
       experiencias: parsed.experiencias,
       habilidades: parsed.habilidades,
+      idiomas: parsed.idiomas,
       educacao: parsed.educacao,
     };
 
     const pdfBuffer = await gerarPDFOtimizado(cvData);
     const base64PDF = pdfBuffer.toString('base64');
 
-    console.log('✅ PDF gerado com sucesso para:', cvData.nome);
+    console.log('✅ PDF gerado para:', cvData.nome);
 
     return NextResponse.json({
       cvData,
