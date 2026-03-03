@@ -5,10 +5,13 @@ import { useState, useRef } from 'react';
 export default function Home() {
   const [cv, setCv] = useState('');
   const [vaga, setVaga] = useState('');
+  const [urlVaga, setUrlVaga] = useState('');
   const [arquivoPDF, setArquivoPDF] = useState<File | null>(null);
   const [resultado, setResultado] = useState<any>(null);
   const [carregando, setCarregando] = useState(false);
+  const [extraindoVaga, setExtraindoVaga] = useState(false);
   const [erro, setErro] = useState('');
+  const [erroVaga, setErroVaga] = useState('');
   const [skillsMarcadas, setSkillsMarcadas] = useState<string[]>([]);
   const [gerandoPDF, setGerandoPDF] = useState(false);
   const [pdfURL, setPdfURL] = useState<string | null>(null);
@@ -35,11 +38,9 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-
       const res = await fetch('/api/upload-pdf', { method: 'POST', body: formData });
       const dados = await res.json();
       if (!res.ok) throw new Error(dados.error);
-
       setCv(dados.textoCV);
       alert('✅ PDF carregado com sucesso!');
     } catch (err: any) {
@@ -47,6 +48,38 @@ export default function Home() {
       setCv('');
     } finally {
       setCarregando(false);
+    }
+  };
+
+  // ── Extrair vaga do LinkedIn ─────────────────────────────────────
+  const extrairVagaLinkedIn = async () => {
+    if (!urlVaga.trim()) return;
+
+    setExtraindoVaga(true);
+    setErroVaga('');
+    setVaga('');
+
+    try {
+      const res = await fetch('/api/extrair-vaga', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlVaga.trim() }),
+      });
+
+      const dados = await res.json();
+
+      if (!res.ok) {
+        // Se bloqueado, mostra aviso mas não trava — usuário pode colar manualmente
+        setErroVaga(dados.error || 'Erro ao extrair vaga');
+        return;
+      }
+
+      setVaga(dados.textoVaga);
+      setErroVaga('');
+    } catch (err: any) {
+      setErroVaga('Erro de conexão ao tentar extrair a vaga.');
+    } finally {
+      setExtraindoVaga(false);
     }
   };
 
@@ -75,15 +108,13 @@ export default function Home() {
       const dados = await res.json();
       if (!res.ok) throw new Error(dados.error);
 
-      const resultadoLimpo = {
+      setResultado({
         score: Number(dados.score) || 0,
         resumo: String(dados.resumo || ''),
         matching_skills: (dados.matching_skills || []).map((s: any) => String(s)),
         missing_skills: (dados.missing_skills || []).map((s: any) => String(s)),
         quick_wins: (dados.quick_wins || []).map((s: any) => String(s)),
-      };
-
-      setResultado(resultadoLimpo);
+      });
     } catch (err: any) {
       setErro(err.message);
     } finally {
@@ -106,8 +137,6 @@ export default function Home() {
 
     setGerandoPDF(true);
     setErro('');
-    setVagaResumo(null);
-    setSalario(null);
 
     try {
       const res = await fetch('/api/gerar-pdf-otimizado', {
@@ -115,7 +144,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cvOriginal: cv,
-          vaga: vaga,
+          vaga,
           skillsAdicionais: skillsMarcadas,
           missingSkills: resultado?.missing_skills || [],
         }),
@@ -129,8 +158,7 @@ export default function Home() {
       setSalario(dados.salario || null);
 
       const blob = base64ToBlob(dados.pdfBase64, 'application/pdf');
-      const url = URL.createObjectURL(blob);
-      setPdfURL(url);
+      setPdfURL(URL.createObjectURL(blob));
     } catch (err: any) {
       setErro(err.message);
     } finally {
@@ -157,10 +185,6 @@ export default function Home() {
     setTimeout(() => URL.revokeObjectURL(pdfURL), 100);
   };
 
-  const visualizarPDF = () => {
-    if (pdfURL) window.open(pdfURL, '_blank');
-  };
-
   const scoreColor =
     resultado?.score >= 70
       ? 'text-green-600'
@@ -179,7 +203,7 @@ export default function Home() {
           <p className="text-gray-500 mt-1">Upload de PDF → Análise de Match → CV Otimizado</p>
         </div>
 
-        {/* Upload PDF */}
+        {/* Upload PDF do currículo */}
         <div className="bg-white rounded-xl shadow p-5">
           <label className="block font-semibold text-gray-700 mb-2">📄 Upload do Currículo (PDF)</label>
           <input
@@ -197,32 +221,70 @@ export default function Home() {
           )}
         </div>
 
-        {/* CV Text */}
+        {/* CV texto manual */}
         <div className="bg-white rounded-xl shadow p-5">
           <label className="block font-semibold text-gray-700 mb-2">📝 Ou cole o texto do currículo</label>
           <textarea
-            className="w-full p-3 border border-gray-200 rounded-lg min-h-[140px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
+            className="w-full p-3 border border-gray-200 rounded-lg min-h-[120px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
             placeholder="Cole aqui o texto do seu currículo..."
             value={cv}
             onChange={(e) => setCv(e.target.value)}
           />
-          {cv && (
-            <p className="mt-1 text-xs text-gray-400 text-right">{cv.length} caracteres</p>
-          )}
+          {cv && <p className="mt-1 text-xs text-gray-400 text-right">{cv.length} caracteres</p>}
         </div>
 
-        {/* Vaga */}
-        <div className="bg-white rounded-xl shadow p-5">
-          <label className="block font-semibold text-gray-700 mb-2">💼 Descrição da Vaga</label>
+        {/* Vaga — URL LinkedIn */}
+        <div className="bg-white rounded-xl shadow p-5 space-y-3">
+          <label className="block font-semibold text-gray-700">💼 Vaga do LinkedIn</label>
+
+          {/* Campo URL */}
+          <div className="flex gap-2">
+            <input
+              type="url"
+              className="flex-1 p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              placeholder="https://www.linkedin.com/jobs/view/..."
+              value={urlVaga}
+              onChange={(e) => setUrlVaga(e.target.value)}
+            />
+            <button
+              onClick={extrairVagaLinkedIn}
+              disabled={extraindoVaga || !urlVaga.trim()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap transition-colors"
+            >
+              {extraindoVaga ? '🔄 Extraindo...' : '🔗 Extrair Vaga'}
+            </button>
+          </div>
+
+          {/* Aviso de bloqueio */}
+          {erroVaga && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
+              ⚠️ {erroVaga}
+              <p className="mt-1 text-xs text-yellow-600">
+                Cole o texto da vaga manualmente no campo abaixo.
+              </p>
+            </div>
+          )}
+
+          {/* Sucesso extração */}
+          {vaga && !erroVaga && urlVaga && (
+            <p className="text-xs text-green-600 font-medium">✅ Vaga extraída com sucesso!</p>
+          )}
+
+          {/* Divisor */}
+          <div className="flex items-center gap-3 text-gray-300">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400">ou cole manualmente</span>
+            <div className="flex-1 h-px bg-gray-200" />
+          </div>
+
+          {/* Textarea manual */}
           <textarea
-            className="w-full p-3 border border-gray-200 rounded-lg min-h-[140px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
-            placeholder="Cole aqui a descrição da vaga (LinkedIn, site da empresa, etc.)..."
+            className="w-full p-3 border border-gray-200 rounded-lg min-h-[120px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
+            placeholder="Cole aqui o texto completo da vaga..."
             value={vaga}
             onChange={(e) => setVaga(e.target.value)}
           />
-          {vaga && (
-            <p className="mt-1 text-xs text-gray-400 text-right">{vaga.length} caracteres</p>
-          )}
+          {vaga && <p className="mt-1 text-xs text-gray-400 text-right">{vaga.length} caracteres</p>}
         </div>
 
         {/* Botão analisar */}
@@ -231,29 +293,26 @@ export default function Home() {
           disabled={carregando || !cv.trim() || !vaga.trim()}
           className="w-full py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {carregando && !resultado ? '🔄 Analisando...' : '🔍 Calcular Match'}
+          {carregando ? '🔄 Analisando...' : '🔍 Calcular Match'}
         </button>
 
-        {/* Erro */}
+        {/* Erro geral */}
         {erro && (
           <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
             ❌ {erro}
           </div>
         )}
 
-        {/* Resultado da análise */}
+        {/* Resultado */}
         {resultado && (
           <div className="bg-white rounded-xl shadow p-5 space-y-5">
 
             {/* Score */}
             <div className="text-center">
-              <span className={`text-6xl font-bold ${scoreColor}`}>
-                {resultado.score}%
-              </span>
+              <span className={`text-6xl font-bold ${scoreColor}`}>{resultado.score}%</span>
               <p className="text-gray-500 mt-1">de compatibilidade com a vaga</p>
             </div>
 
-            {/* Resumo da análise */}
             {resultado.resumo && (
               <p className="italic text-gray-600 text-center border-t border-b border-gray-100 py-3">
                 "{resultado.resumo}"
@@ -280,10 +339,7 @@ export default function Home() {
                 <h4 className="font-semibold text-green-700 mb-2">✅ Habilidades identificadas</h4>
                 <div className="flex flex-wrap gap-2">
                   {resultado.matching_skills.map((s: string, i: number) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-                    >
+                    <span key={i} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
                       {s}
                     </span>
                   ))}
@@ -291,12 +347,12 @@ export default function Home() {
               </div>
             )}
 
-            {/* Skills ausentes com checkboxes */}
+            {/* Skills ausentes */}
             {resultado.missing_skills?.length > 0 && (
               <div>
                 <h4 className="font-semibold text-red-600 mb-1">❌ Habilidades não encontradas no CV</h4>
                 <p className="text-xs text-gray-500 mb-3">
-                  Marque as que você possui — elas serão integradas ao CV otimizado:
+                  Marque as que você possui — serão integradas ao CV otimizado:
                 </p>
                 <div className="space-y-2">
                   {resultado.missing_skills.map((skill: string, i: number) => (
@@ -321,7 +377,6 @@ export default function Home() {
                     </label>
                   ))}
                 </div>
-
                 {skillsMarcadas.length > 0 && (
                   <p className="mt-2 text-xs text-blue-600 font-medium">
                     {skillsMarcadas.length} habilidade{skillsMarcadas.length > 1 ? 's' : ''} selecionada{skillsMarcadas.length > 1 ? 's' : ''}
@@ -346,7 +401,6 @@ export default function Home() {
               <div className="p-4 bg-green-50 rounded-xl border border-green-200 space-y-3">
                 <p className="font-semibold text-green-700 text-lg">✅ CV otimizado gerado!</p>
 
-                {/* Resumo da vaga */}
                 {vagaResumo && (
                   <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
                     <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">
@@ -356,7 +410,6 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Salário */}
                 {salario && salario !== 'Não informado' && (
                   <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-100">
                     <p className="text-xs font-semibold text-yellow-600 uppercase tracking-wide mb-1">
@@ -375,10 +428,9 @@ export default function Home() {
                   </div>
                 )}
 
-                {/* Botões */}
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={visualizarPDF}
+                    onClick={() => window.open(pdfURL, '_blank')}
                     className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-medium transition-colors"
                   >
                     👁️ Visualizar

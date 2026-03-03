@@ -3,6 +3,14 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { gerarPDFOtimizado, type CVData } from '@/utils/pdfGenerator';
 
+const VERBOS_ACAO = [
+  ['gerenciei', 'coordenei', 'liderei', 'conduzi', 'supervisionei', 'administrei', 'dirigi'],
+  ['implementei', 'desenvolvi', 'criei', 'estruturei', 'estabeleci', 'implantei', 'concebi'],
+  ['otimizei', 'aprimorei', 'melhorei', 'refinei', 'reestruturei', 'modernizei', 'acelerei'],
+  ['negociei', 'articulei', 'mediei', 'firmei', 'conduzindo', 'estabelecendo', 'alinhei'],
+  ['reduzi', 'cortei', 'eliminei', 'diminuí', 'enxuguei', 'minimizei', 'controlei'],
+];
+
 export async function POST(request: Request) {
   try {
     const { cvOriginal, vaga, skillsAdicionais, missingSkills } = await request.json();
@@ -16,9 +24,34 @@ export async function POST(request: Request) {
       apiKey: process.env.GROQ_API_KEY!,
     });
 
+    // Variação aleatória para forçar textos diferentes a cada geração
+    const variacao = Math.floor(Math.random() * 4) + 1;
+    const seed = Date.now();
+    const estilos = [
+      'narrativa cronológica focada em crescimento e progressão de carreira',
+      'narrativa orientada a resultados e métricas concretas com foco quantitativo',
+      'narrativa focada em liderança, processos e impacto organizacional',
+      'narrativa focada em inovação, otimização e transformação de processos',
+    ];
+    const estiloAtual = estilos[variacao - 1];
+
     const prompt = `
-Você é um headhunter sênior especialista em ATS e otimização de currículos.
-Reescreva o currículo abaixo para MAXIMIZAR as chances de aprovação na vaga específica.
+Você é um headhunter sênior especialista em ATS — VERSÃO ${variacao} DE 4 (seed: ${seed}).
+
+╔══════════════════════════════════════════╗
+║  GERE UMA VERSÃO COMPLETAMENTE DIFERENTE ║
+╚══════════════════════════════════════════╝
+
+Esta é a versão ${variacao} de 4 possíveis versões do currículo.
+Estilo desta versão: ${estiloAtual}
+
+VOCÊ DEVE OBRIGATORIAMENTE:
+✦ Usar vocabulário e sinônimos DIFERENTES — nunca repita as mesmas frases
+✦ Mudar a ESTRUTURA das frases completamente (não apenas trocar palavras)
+✦ Reordenar os bullet points — destaque aspectos DIFERENTES de cada experiência
+✦ Reescrever o resumo com abordagem narrativa COMPLETAMENTE diferente
+✦ Variar os verbos de ação — use: coordenei, liderei, estruturei, articulei, aprimorei, implantei, concebi, refinei, firmei, enxuguei (nunca repita os mesmos)
+✦ Destacar ângulos diferentes da mesma experiência (ex: versão 1 foca em custos, versão 2 foca em processos, versão 3 foca em equipes, versão 4 foca em tecnologia)
 
 ═══════════════════════════════════
 CURRÍCULO ORIGINAL:
@@ -46,51 +79,42 @@ REGRAS OBRIGATÓRIAS:
 1. PRESERVAR EXATAMENTE: nome, email, telefone, LinkedIn, empresas, cargos, períodos, instituições, cursos, anos e idiomas do original
 
 2. RESUMO PROFISSIONAL — regras estritas:
-   - Primeira frase: mencionar o CARGO EXATO da vaga e o SETOR/ÁREA da empresa (ex: "Procurement Specialist com foco em gestão de contratos para o setor de consultoria de TI")
+   - Primeira frase: mencionar o CARGO EXATO da vaga e o SETOR/ÁREA da empresa
    - Segunda frase: conectar os 2-3 principais requisitos da vaga com experiências reais do candidato
-   - Terceira frase: proposta de valor concreta — o que o candidato ENTREGA, não quem ele "é"
+   - Terceira frase: proposta de valor concreta — o que o candidato ENTREGA
    - PROIBIDO: "profissional dedicado", "busca novos desafios", "ampla experiência", "perfil dinâmico", "proativo", "comprometido"
-   - Máximo 4 linhas, linguagem direta, específica e orientada à vaga
+   - O texto DEVE ser visivelmente diferente de outras versões por usar o estilo: ${estiloAtual}
+   - Máximo 4 linhas
 
-3. EXPERIÊNCIAS — para cada cargo:
-   - 4 a 6 bullet points ricos, detalhados e orientados a resultados
-   - Integrar as skills adicionais naturalmente onde fizer sentido real
-   - Usar palavras-chave EXATAS da vaga para passar no ATS
-   - Adicionar métricas e resultados concretos onde possível (%, tempo, escala, valor)
+3. EXPERIÊNCIAS:
+   - 4 a 6 bullet points por cargo
+   - Integrar skills adicionais naturalmente
+   - Usar palavras-chave EXATAS da vaga para ATS
+   - Métricas e resultados concretos (%, tempo, escala, valor)
+   - Bullet points em ordem DIFERENTE das outras versões
 
-4. HABILIDADES: incluir todas do original + skills adicionais + keywords relevantes da vaga
+4. HABILIDADES: todas do original + skills adicionais + keywords da vaga
 
-5. IDIOMAS: extrair do currículo original TODOS os idiomas mencionados com seus níveis.
-   Se não houver idiomas no CV mas a vaga exigir ou mencionar algum idioma, incluir o idioma da vaga com nível "A verificar".
-   Formato: [{ "idioma": "Português", "nivel": "Nativo" }, { "idioma": "Inglês", "nivel": "Intermediário" }]
+5. IDIOMAS: extrair todos os idiomas do CV com seus níveis.
+   Formato: [{ "idioma": "Português", "nivel": "Nativo" }]
 
-6. NÃO inventar empresas, cargos, períodos ou formações inexistentes
+6. NÃO inventar empresas, cargos, períodos ou formações
 
-7. Cada bullet point DEVE começar com "• " e ser separado por \\n
-
-═══════════════════════════════════
-EXEMPLO DE RESUMO CORRETO:
-═══════════════════════════════════
-"Procurement Specialist com 10 anos de experiência em gestão de contratos e compras indiretas para o setor de incorporação e construção civil. Histórico comprovado em negociação com fornecedores, implementação de sistemas ERP e otimização de processos de compra que resultaram em reduções de custo significativas. Entrega estruturação de ciclo completo de contratos, desde a negociação até o encerramento, com foco em compliance e eficiência operacional."
+7. Cada bullet point começa com "• " separado por \\n
 
 ═══════════════════════════════════
-EXEMPLO DE BULLET POINTS CORRETOS:
+EXTRAIA DA VAGA:
 ═══════════════════════════════════
-"• Gerenciei ciclo completo de contratos (contract lifecycle) com fornecedores estratégicos, desde negociação até encerramento, reduzindo custos operacionais em 18%\\n• Conduzi processos de indirect procurement para serviços de consultoria e tecnologia, garantindo SLAs e compliance documental\\n• Implementei e administrei módulos do SAP R/3 para gestão de pedidos, contratos e relatórios gerenciais\\n• Desenvolvi dashboards no Excel Avançado e Power BI para monitoramento de KPIs de fornecedores e orçamento\\n• Mantive base de documentação obrigatória de fornecedores atualizada, assegurando conformidade regulatória"
+- vagaResumo: 2 linhas (empresa/cargo/local/modelo)
+- salario: valor exato ou "Não informado"
 
 ═══════════════════════════════════
-EXTRAIA TAMBÉM DA VAGA:
-═══════════════════════════════════
-- vagaResumo: 2 linhas (empresa/cargo/local/modelo de trabalho)
-- salario: valor exato mencionado na vaga. Se não houver, use "Não informado"
-
-═══════════════════════════════════
-RETORNE APENAS JSON PURO — SEM MARKDOWN:
+RETORNE APENAS JSON PURO:
 ═══════════════════════════════════
 {
   "nome": "Nome exato",
   "contato": "email | telefone | linkedin",
-  "resumo": "Resumo profissional altamente direcionado à vaga",
+  "resumo": "Resumo versão ${variacao} — estilo ${estiloAtual}",
   "experiencias": [
     {
       "cargo": "Cargo exato",
@@ -101,8 +125,7 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
   ],
   "habilidades": ["skill1", "skill2", "skill3"],
   "idiomas": [
-    { "idioma": "Português", "nivel": "Nativo" },
-    { "idioma": "Inglês", "nivel": "Intermediário" }
+    { "idioma": "Português", "nivel": "Nativo" }
   ],
   "educacao": [
     {
@@ -111,8 +134,8 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
       "ano": "Ano exato"
     }
   ],
-  "vagaResumo": "Resumo da vaga em 2 linhas",
-  "salario": "Salário extraído ou 'Não informado'"
+  "vagaResumo": "Resumo da vaga",
+  "salario": "Salário ou 'Não informado'"
 }
 `;
 
@@ -121,17 +144,16 @@ RETORNE APENAS JSON PURO — SEM MARKDOWN:
       messages: [
         {
           role: 'system',
-          content: `Você é um headhunter sênior especialista em ATS.
-Ao escrever o resumo profissional do CV:
-- NUNCA use frases genéricas como "profissional dedicado", "busca novos desafios", "ampla experiência" ou "perfil dinâmico"
-- SEMPRE mencione o cargo-alvo e o setor da empresa da vaga na primeira frase
-- SEMPRE conecte as conquistas do candidato com os requisitos específicos da vaga
-- Escreva como se o candidato já fosse a pessoa ideal para aquela posição
+          content: `Você é um headhunter sênior gerando a VERSÃO ${variacao} de 4 versões diferentes de um currículo.
+Esta versão usa o estilo: ${estiloAtual}.
+NUNCA use as mesmas frases, estrutura ou verbos que usaria em outra versão.
+NUNCA use: "profissional dedicado", "busca novos desafios", "ampla experiência", "perfil dinâmico".
+SEMPRE mencione o cargo-alvo e setor da empresa na primeira frase do resumo.
 Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
         },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.2,
+      temperature: 0.9,
       max_tokens: 4000,
       response_format: { type: 'json_object' },
     });
@@ -144,7 +166,7 @@ Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
       .replace(/```\n?/g, '')
       .trim();
 
-    console.log('📄 JSON da IA (500 chars):', contentLimpo.substring(0, 500));
+    console.log(`📄 Versão ${variacao} — JSON (500 chars):`, contentLimpo.substring(0, 500));
 
     let parsed: any;
     try {
@@ -159,12 +181,10 @@ Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
       throw new Error('IA não gerou CV com estrutura válida');
     }
 
-    // Garantir arrays
     parsed.habilidades = parsed.habilidades || [];
     parsed.educacao = parsed.educacao || [];
     parsed.idiomas = Array.isArray(parsed.idiomas) ? parsed.idiomas : [];
 
-    // Normalizar \n literal em quebra real
     parsed.experiencias = parsed.experiencias.map((exp: any) => ({
       ...exp,
       descricao: String(exp.descricao || '')
@@ -186,14 +206,16 @@ Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
     const pdfBuffer = await gerarPDFOtimizado(cvData);
     const base64PDF = pdfBuffer.toString('base64');
 
-    console.log('✅ PDF gerado para:', cvData.nome);
+    console.log(`✅ PDF versão ${variacao} gerado para:`, cvData.nome);
 
     return NextResponse.json({
       cvData,
       pdfBase64: base64PDF,
+      versao: variacao,
+      estilo: estiloAtual,
       vagaResumo: parsed.vagaResumo || null,
       salario: parsed.salario || 'Não informado',
-      message: 'PDF otimizado gerado com sucesso!',
+      message: `PDF otimizado gerado — versão ${variacao} (${estiloAtual})`,
     });
 
   } catch (error: any) {

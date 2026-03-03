@@ -36,6 +36,7 @@ REGRAS CRÍTICAS:
 2. Arrays NUNCA podem estar vazios (use ["Nenhuma identificada"] se necessário)
 3. Score deve ser número inteiro entre 0-100
 4. Não invente skills que não estão no CV ou na vaga
+5. Não invente ou crie porcentagens que não mencionei no curriculo
 
 CV PARA ANÁLISE:
 ${cv.substring(0, 6000)}
