@@ -3,17 +3,9 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { gerarPDFOtimizado, type CVData } from '@/utils/pdfGenerator';
 
-const VERBOS_ACAO = [
-  ['gerenciei', 'coordenei', 'liderei', 'conduzi', 'supervisionei', 'administrei', 'dirigi'],
-  ['implementei', 'desenvolvi', 'criei', 'estruturei', 'estabeleci', 'implantei', 'concebi'],
-  ['otimizei', 'aprimorei', 'melhorei', 'refinei', 'reestruturei', 'modernizei', 'acelerei'],
-  ['negociei', 'articulei', 'mediei', 'firmei', 'conduzindo', 'estabelecendo', 'alinhei'],
-  ['reduzi', 'cortei', 'eliminei', 'diminuí', 'enxuguei', 'minimizei', 'controlei'],
-];
-
 export async function POST(request: Request) {
   try {
-    const { cvOriginal, vaga, skillsAdicionais, missingSkills } = await request.json();
+    const { cvOriginal, vaga, skillsAdicionais, missingSkills, idiomaVaga } = await request.json();
 
     if (!cvOriginal?.trim() || !vaga?.trim()) {
       return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
@@ -24,118 +16,87 @@ export async function POST(request: Request) {
       apiKey: process.env.GROQ_API_KEY!,
     });
 
-    // Variação aleatória para forçar textos diferentes a cada geração
     const variacao = Math.floor(Math.random() * 4) + 1;
     const seed = Date.now();
     const estilos = [
-      'narrativa cronológica focada em crescimento e progressão de carreira',
-      'narrativa orientada a resultados e métricas concretas com foco quantitativo',
-      'narrativa focada em liderança, processos e impacto organizacional',
-      'narrativa focada em inovação, otimização e transformação de processos',
+      'narrative focused on technical competence and process mastery',
+      'narrative focused on leadership, coordination and organizational impact',
+      'narrative focused on strategic management and decision-making',
+      'narrative focused on operational optimization and delivery excellence',
     ];
     const estiloAtual = estilos[variacao - 1];
 
+    const idioma = idiomaVaga || 'pt';
+    const instrucaoIdioma =
+      idioma === 'en' ? 'WRITE THE ENTIRE CV IN ENGLISH — all sections, bullets, summary, skills, education.' :
+      idioma === 'es' ? 'ESCRIBE TODO EL CV EN ESPAÑOL.' :
+      idioma === 'fr' ? 'RÉDIGEZ TOUT LE CV EN FRANÇAIS.' :
+      'ESCREVA TODO O CV EM PORTUGUÊS BRASILEIRO.';
+
     const prompt = `
-Você é um headhunter sênior especialista em ATS — VERSÃO ${variacao} DE 4 (seed: ${seed}).
+You are a senior headhunter and ATS expert — VERSION ${variacao} OF 4 (seed: ${seed}).
+Style: ${estiloAtual}
 
-╔══════════════════════════════════════════╗
-║  GERE UMA VERSÃO COMPLETAMENTE DIFERENTE ║
-╚══════════════════════════════════════════╝
+⚠️ LANGUAGE RULE: ${instrucaoIdioma}
 
-Esta é a versão ${variacao} de 4 possíveis versões do currículo.
-Estilo desta versão: ${estiloAtual}
-
-VOCÊ DEVE OBRIGATORIAMENTE:
-✦ Usar vocabulário e sinônimos DIFERENTES — nunca repita as mesmas frases
-✦ Mudar a ESTRUTURA das frases completamente (não apenas trocar palavras)
-✦ Reordenar os bullet points — destaque aspectos DIFERENTES de cada experiência
-✦ Reescrever o resumo com abordagem narrativa COMPLETAMENTE diferente
-✦ Variar os verbos de ação — use: coordenei, liderei, estruturei, articulei, aprimorei, implantei, concebi, refinei, firmei, enxuguei (nunca repita os mesmos)
-✦ Destacar ângulos diferentes da mesma experiência (ex: versão 1 foca em custos, versão 2 foca em processos, versão 3 foca em equipes, versão 4 foca em tecnologia)
+GENERATE A COMPLETELY DIFFERENT VERSION — different vocabulary, structure, verb choices, bullet order.
 
 ═══════════════════════════════════
-CURRÍCULO ORIGINAL:
+ORIGINAL CV:
 ═══════════════════════════════════
 ${cvOriginal}
 
 ═══════════════════════════════════
-VAGA ALVO:
+TARGET JOB:
 ═══════════════════════════════════
 ${vaga}
 
 ═══════════════════════════════════
-SKILLS ADICIONAIS DO CANDIDATO:
+ADDITIONAL SKILLS:
 ═══════════════════════════════════
-${skillsAdicionais?.length ? skillsAdicionais.join(', ') : 'Nenhuma'}
-
-═══════════════════════════════════
-SKILLS AUSENTES IDENTIFICADAS:
-═══════════════════════════════════
-${missingSkills?.length ? missingSkills.join(', ') : 'Nenhuma'}
+${skillsAdicionais?.length ? skillsAdicionais.join(', ') : 'None'}
 
 ═══════════════════════════════════
-REGRAS OBRIGATÓRIAS:
+MISSING SKILLS:
 ═══════════════════════════════════
-1. PRESERVAR EXATAMENTE: nome, email, telefone, LinkedIn, empresas, cargos, períodos, instituições, cursos, anos e idiomas do original
-
-2. RESUMO PROFISSIONAL — regras estritas:
-   - Primeira frase: mencionar o CARGO EXATO da vaga e o SETOR/ÁREA da empresa
-   - Segunda frase: conectar os 2-3 principais requisitos da vaga com experiências reais do candidato
-   - Terceira frase: proposta de valor concreta — o que o candidato ENTREGA
-   - PROIBIDO: "profissional dedicado", "busca novos desafios", "ampla experiência", "perfil dinâmico", "proativo", "comprometido"
-   - O texto DEVE ser visivelmente diferente de outras versões por usar o estilo: ${estiloAtual}
-   - Máximo 4 linhas
-
-3. EXPERIÊNCIAS:
-   - 4 a 6 bullet points por cargo
-   - Integrar skills adicionais naturalmente
-   - Usar palavras-chave EXATAS da vaga para ATS
-   - Métricas e resultados concretos (%, tempo, escala, valor)
-   - Bullet points em ordem DIFERENTE das outras versões
-
-4. HABILIDADES: todas do original + skills adicionais + keywords da vaga
-
-5. IDIOMAS: extrair todos os idiomas do CV com seus níveis.
-   Formato: [{ "idioma": "Português", "nivel": "Nativo" }]
-
-6. NÃO inventar empresas, cargos, períodos ou formações
-
-7. Cada bullet point começa com "• " separado por \\n
+${missingSkills?.length ? missingSkills.join(', ') : 'None'}
 
 ═══════════════════════════════════
-EXTRAIA DA VAGA:
+MANDATORY RULES:
 ═══════════════════════════════════
-- vagaResumo: 2 linhas (empresa/cargo/local/modelo)
-- salario: valor exato ou "Não informado"
+1. PRESERVE EXACTLY: name, email, phone, LinkedIn, companies, job titles, periods, institutions, courses, years
+2. PROFESSIONAL SUMMARY:
+   - First sentence: exact job title from posting + company sector
+   - Second sentence: connect 2-3 key requirements with real candidate experience
+   - Third sentence: concrete value proposition — what candidate DELIVERS
+   - FORBIDDEN: "dedicated professional", "seeking new challenges", "extensive experience"
+   - Max 4 lines
+3. EXPERIENCE bullets:
+   - 4-6 bullets per role
+   - Integrate additional skills naturally
+   - Use EXACT job posting keywords for ATS
+   - ⛔ NEVER invent percentages or numerical metrics absent from original CV
+   - ✅ Use solid qualitative results: "ensuring full contract lifecycle compliance", "eliminating approval bottlenecks", "consolidating strategic supplier base"
+   - Tone: confident, technical, direct
+4. SKILLS: all from original + additional + job keywords
+5. LANGUAGES: extract ALL from original CV with levels
+6. Each bullet starts with "• " separated by \\n
+7. ⚠️ ENTIRE CV in the language specified above
 
-═══════════════════════════════════
-RETORNE APENAS JSON PURO:
-═══════════════════════════════════
+RETURN ONLY PURE JSON:
 {
-  "nome": "Nome exato",
-  "contato": "email | telefone | linkedin",
-  "resumo": "Resumo versão ${variacao} — estilo ${estiloAtual}",
+  "nome": "Exact name",
+  "contato": "email | phone | linkedin",
+  "resumo": "Summary version ${variacao}",
   "experiencias": [
-    {
-      "cargo": "Cargo exato",
-      "empresa": "Empresa exata",
-      "periodo": "Período exato",
-      "descricao": "• Bullet 1\\n• Bullet 2\\n• Bullet 3\\n• Bullet 4\\n• Bullet 5"
-    }
+    { "cargo": "Title", "empresa": "Company", "periodo": "Period", "descricao": "• Bullet 1\\n• Bullet 2\\n• Bullet 3\\n• Bullet 4" }
   ],
-  "habilidades": ["skill1", "skill2", "skill3"],
-  "idiomas": [
-    { "idioma": "Português", "nivel": "Nativo" }
-  ],
-  "educacao": [
-    {
-      "curso": "Curso exato",
-      "instituicao": "Instituição exata",
-      "ano": "Ano exato"
-    }
-  ],
-  "vagaResumo": "Resumo da vaga",
-  "salario": "Salário ou 'Não informado'"
+  "habilidades": ["skill1", "skill2"],
+  "idiomas": [{ "idioma": "Language", "nivel": "Level" }],
+  "educacao": [{ "curso": "Course", "instituicao": "Institution", "ano": "Year" }],
+  "vagaResumo": "Job summary 2 lines",
+  "salario": "Salary or 'Not informed'",
+  "beneficios": "Benefits or 'Not informed'"
 }
 `;
 
@@ -144,12 +105,13 @@ RETORNE APENAS JSON PURO:
       messages: [
         {
           role: 'system',
-          content: `Você é um headhunter sênior gerando a VERSÃO ${variacao} de 4 versões diferentes de um currículo.
-Esta versão usa o estilo: ${estiloAtual}.
-NUNCA use as mesmas frases, estrutura ou verbos que usaria em outra versão.
-NUNCA use: "profissional dedicado", "busca novos desafios", "ampla experiência", "perfil dinâmico".
-SEMPRE mencione o cargo-alvo e setor da empresa na primeira frase do resumo.
-Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
+          content: `You are a senior headhunter generating VERSION ${variacao} of 4 of a CV.
+Style: ${estiloAtual}. Language: ${instrucaoIdioma}
+- NEVER invent percentages or numerical metrics absent from original CV
+- NEVER use "dedicated professional", "seeking new challenges", "extensive experience"
+- ALWAYS mention the target job title and company sector in the first summary sentence
+- Use COMPLETELY DIFFERENT vocabulary and structure from other versions
+- Return ONLY valid JSON, no markdown.`,
         },
         { role: 'user', content: prompt },
       ],
@@ -159,38 +121,27 @@ Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
     });
 
     const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error('Resposta vazia da IA');
+    if (!content) throw new Error('Empty response from AI');
 
-    const contentLimpo = content
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-
-    console.log(`📄 Versão ${variacao} — JSON (500 chars):`, contentLimpo.substring(0, 500));
+    const contentLimpo = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     let parsed: any;
     try {
       parsed = JSON.parse(contentLimpo);
     } catch {
-      console.error('❌ JSON inválido:', contentLimpo);
-      throw new Error('A IA retornou JSON inválido. Tente novamente.');
+      throw new Error('AI returned invalid JSON. Please try again.');
     }
 
-    if (!parsed.nome || !Array.isArray(parsed.experiencias) || parsed.experiencias.length === 0) {
-      console.error('❌ Estrutura inválida:', JSON.stringify(parsed, null, 2));
-      throw new Error('IA não gerou CV com estrutura válida');
+    if (!parsed.nome || !Array.isArray(parsed.experiencias) || !parsed.experiencias.length) {
+      throw new Error('AI did not generate a valid CV structure.');
     }
 
     parsed.habilidades = parsed.habilidades || [];
     parsed.educacao = parsed.educacao || [];
     parsed.idiomas = Array.isArray(parsed.idiomas) ? parsed.idiomas : [];
-
     parsed.experiencias = parsed.experiencias.map((exp: any) => ({
       ...exp,
-      descricao: String(exp.descricao || '')
-        .replace(/\\n/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim(),
+      descricao: String(exp.descricao || '').replace(/\\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(),
     }));
 
     const cvData: CVData = {
@@ -206,23 +157,19 @@ Retorne APENAS JSON válido, sem markdown, sem texto antes ou depois.`,
     const pdfBuffer = await gerarPDFOtimizado(cvData);
     const base64PDF = pdfBuffer.toString('base64');
 
-    console.log(`✅ PDF versão ${variacao} gerado para:`, cvData.nome);
+    console.log(`✅ PDF v${variacao} gerado para:`, cvData.nome);
 
     return NextResponse.json({
       cvData,
       pdfBase64: base64PDF,
       versao: variacao,
-      estilo: estiloAtual,
       vagaResumo: parsed.vagaResumo || null,
       salario: parsed.salario || 'Não informado',
-      message: `PDF otimizado gerado — versão ${variacao} (${estiloAtual})`,
+      beneficios: parsed.beneficios || 'Não informado',
     });
 
   } catch (error: any) {
     console.error('💥 Erro ao gerar PDF:', error?.message);
-    return NextResponse.json(
-      { error: error?.message || 'Erro ao gerar PDF otimizado' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error?.message || 'Erro ao gerar PDF' }, { status: 500 });
   }
 }

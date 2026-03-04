@@ -5,107 +5,112 @@ import OpenAI from 'openai';
 export async function POST(request: Request) {
   try {
     const { cv, vaga } = await request.json();
-    
+
     if (!cv?.trim() || !vaga?.trim()) {
       return NextResponse.json({ error: 'CV e vaga são obrigatórios' }, { status: 400 });
     }
 
-    // ✅ baseURL SEM ESPAÇOS!
     const groq = new OpenAI({
       baseURL: 'https://api.groq.com/openai/v1',
       apiKey: process.env.GROQ_API_KEY!,
     });
 
-    const MODEL = 'llama-3.3-70b-versatile';
-
-    // ✅ PROMPT RIGOROSO COM EXEMPLO
     const prompt = `
-Você é um recrutador sênior especialista em ATS. Retorne APENAS JSON válido.
+Você é um recrutador sênior extremamente exigente, especialista em ATS.
+Analise o CV e a vaga abaixo com olhar crítico, detalhado e realista.
 
-ESTRUTURA JSON OBRIGATÓRIA (preencha todos os campos):
+RETORNE APENAS JSON válido com esta estrutura COMPLETA:
 {
-  "score": number (0-100, seja rigoroso),
+  "score": number (0-100),
+  "idioma_vaga": "pt" | "en" | "es" | "fr",
   "matching_skills": ["skill1", "skill2"],
   "missing_skills": ["skillX", "skillY"],
-  "quick_wins": ["dica1", "dica2"],
-  "resumo": "Frase curta e motivacional"
+  "analise_score": {
+    "pontos_fortes": ["razão específica que contribuiu para o score", "outra razão"],
+    "pontos_fracos": ["razão específica que derrubou o score", "outra razão", "mais uma"],
+    "gap_principal": "Explicação CIRÚRGICA e DETALHADA do principal motivo pelo qual o score não foi maior. Seja específico: mencione ferramentas, setores, experiências ou competências que faltam. Ex: 'O CV não evidencia experiência com SAP MM/SRM, módulo central da vaga. Além disso, o candidato nunca atuou no setor de construção civil, que tem dinâmicas de fornecimento muito específicas exigidas pela vaga.'",
+    "chance_entrevista": "Alta" | "Média" | "Baixa",
+    "veredicto": "Frase direta e honesta de 1-2 linhas. Ex: 'Perfil com base técnica sólida em procurement, mas distante do setor e das ferramentas específicas da vaga. Precisa evidenciar SAP e experiência em contratos de obras.'"
+  },
+  "quick_wins": ["ação concreta 1", "ação concreta 2", "ação concreta 3"],
+  "vagaResumo": "Resumo em 2 linhas: empresa, cargo, local, modelo",
+  "salario": "Valor exato ou 'Não informado'",
+  "beneficios": "Lista dos benefícios mencionados ou 'Não informado'"
 }
 
-REGRAS CRÍTICAS:
-1. Retorne APENAS JSON puro, SEM markdown, SEM \`\`\`, SEM explicações
-2. Arrays NUNCA podem estar vazios (use ["Nenhuma identificada"] se necessário)
-3. Score deve ser número inteiro entre 0-100
-4. Não invente skills que não estão no CV ou na vaga
-5. Não invente ou crie porcentagens que não mencionei no curriculo
+CRITÉRIOS DE SCORE (use para calcular com precisão):
+- Experiência no mesmo setor da vaga: até 25 pontos
+- Ferramentas/sistemas específicos exigidos: até 25 pontos
+- Nível de senioridade compatível: até 20 pontos
+- Keywords da vaga presentes no CV: até 15 pontos
+- Idioma e localização: até 15 pontos
 
-CV PARA ANÁLISE:
+REGRAS CRÍTICAS:
+1. JSON puro, SEM markdown, SEM texto fora do JSON
+2. Arrays NUNCA vazios
+3. analise_score é OBRIGATÓRIO e DETALHADO — é o coração da análise
+4. pontos_fracos: mínimo 3 itens, cada um explicando ESPECIFICAMENTE o que derrubou o score
+5. gap_principal: seja cirúrgico — mencione ferramentas, setores, competências ausentes pelo nome
+6. ⛔ PROIBIDO inventar porcentagens ou métricas numéricas
+7. quick_wins: ações CONCRETAS que o candidato pode tomar no CV agora
+
+CV:
 ${cv.substring(0, 6000)}
 
-VAGA PARA ANÁLISE:
+VAGA:
 ${vaga.substring(0, 6000)}
 
-JSON (sem markdown, sem explicações, apenas o objeto):
+JSON:
 `;
 
     const completion = await groq.chat.completions.create({
-      model: MODEL,
+      model: 'llama-3.3-70b-versatile',
       messages: [
-        { 
-          role: 'system', 
-          content: 'Você retorna APENAS JSON válido. Nada de markdown, nada de texto explicativo. Apenas o objeto JSON puro.' 
+        {
+          role: 'system',
+          content: `Você é um recrutador sênior extremamente exigente e honesto.
+Sua análise deve ser DETALHADA — o candidato precisa entender EXATAMENTE por que o score foi aquele valor.
+Se o score foi baixo, explique com precisão o que falta. Não seja vago.
+NUNCA infle scores. NUNCA use métricas inventadas.
+Retorne APENAS JSON válido, sem markdown.`,
         },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt },
       ],
       temperature: 0.1,
-      response_format: { type: 'json_object' }
+      response_format: { type: 'json_object' },
     });
 
     let content = completion.choices[0]?.message?.content;
-    
-    // 🐛 DEBUG LOG
-    console.log('📥 Resposta bruta da IA:', content?.substring(0, 400) + '...');
+    if (!content) throw new Error('IA retornou resposta vazia');
 
-    if (!content) {
-      throw new Error('IA retornou resposta vazia');
-    }
+    content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-    // 🧹 LIMPEZA DE MARKDOWN E CARACTERES EXTRAS
-    content = content
-      .replace(/```json/g, '')
-      .replace(/```/g, '')
-      .replace(/^\s*[\r\n]/gm, '')
-      .trim();
-
-    console.log('🧹 JSON após limpeza:', content.substring(0, 300) + '...');
-
-    // 🔄 PARSE SEGURO
-    let resultado;
+    let resultado: any;
     try {
       resultado = JSON.parse(content);
-    } catch (parseError) {
-      console.error('❌ Erro ao parsear JSON:', parseError);
-      console.error('📄 Conteúdo que falhou:', content);
-      throw new Error('Resposta da IA não é um JSON válido. Tente novamente.');
+    } catch {
+      throw new Error('Resposta da IA não é JSON válido. Tente novamente.');
     }
 
-    // ✅ VALIDAÇÃO DA ESTRUTURA
-    const camposObrigatorios = ['score', 'matching_skills', 'missing_skills', 'quick_wins', 'resumo'];
-    for (const campo of camposObrigatorios) {
-      if (!(campo in resultado)) {
-        console.error(`❌ Campo faltando: ${campo}`, resultado);
-        throw new Error(`Resposta da IA está incompleta: faltando "${campo}"`);
-      }
+    // Validações e fallbacks
+    if (!resultado.score) resultado.score = 0;
+    if (!resultado.idioma_vaga) resultado.idioma_vaga = 'pt';
+    if (!resultado.matching_skills?.length) resultado.matching_skills = ['Nenhuma identificada'];
+    if (!resultado.missing_skills?.length) resultado.missing_skills = ['Nenhuma faltante'];
+    if (!resultado.quick_wins?.length) resultado.quick_wins = ['Revise o CV com foco nas palavras-chave da vaga'];
+    if (!resultado.analise_score) {
+      resultado.analise_score = {
+        pontos_fortes: ['Análise não disponível'],
+        pontos_fracos: ['Análise não disponível'],
+        gap_principal: 'Não foi possível gerar análise detalhada.',
+        chance_entrevista: 'Média',
+        veredicto: 'Análise não disponível.',
+      };
     }
 
-    // Garantir que arrays não estejam vazios
-    if (resultado.matching_skills.length === 0) resultado.matching_skills = ['Nenhuma identificada'];
-    if (resultado.missing_skills.length === 0) resultado.missing_skills = ['Nenhuma faltante'];
-    if (resultado.quick_wins.length === 0) resultado.quick_wins = ['CV já está bem otimizado'];
-
-    console.log('✅ Match analisado com sucesso:', { score: resultado.score });
-
+    console.log('✅ Match analisado:', { score: resultado.score, idioma: resultado.idioma_vaga });
     return NextResponse.json(resultado);
-    
+
   } catch (error: any) {
     console.error('💥 ERRO NA ANÁLISE:', error?.message);
     return NextResponse.json(
